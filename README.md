@@ -67,4 +67,4 @@ Returns server health:
 
 ## What is not implemented
 
-Usage collectors, provider log parsing, polling, usage cards, real dashboard data, provider percentages, launchd service, and Tailscale configuration are intentionally out of scope for this bootstrap. They will be added in future iterations.
+Usage collectors, provider log parsing, polling, usage cards, real dashboard data, launchd service, and Tailscale configuration are intentionally out of scope for this bootstrap. They will be added in future iterations. When provider percentages are introduced in a future iteration, they will be approximations derived from local data and will not reflect provider-authoritative figures.
