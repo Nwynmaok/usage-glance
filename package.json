@@ -12,7 +12,13 @@
     "start": "node dist/server/index.js",
     "test": "vitest run",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "service:install": "node scripts/launchd.mjs install",
+    "service:start": "node scripts/launchd.mjs start",
+    "service:restart": "node scripts/launchd.mjs restart",
+    "service:status": "node scripts/launchd.mjs status",
+    "service:uninstall": "node scripts/launchd.mjs uninstall",
+    "service:verify": "node scripts/launchd.mjs verify"
   },
   "dependencies": {
     "@fastify/static": "^8.0.0",
