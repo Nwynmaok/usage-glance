@@ -22,7 +22,7 @@ describe("launchd plist generation", () => {
     const plist = buildLaunchAgentPlist({ npmPath: FAKE_NPM });
     expect(plist).toContain("<key>WorkingDirectory</key>");
     expect(plist).toContain(`<string>${REPO_ROOT}</string>`);
-    expect(REPO_ROOT).toMatch(/\/usage-glance$/);
+    expect(REPO_ROOT).toMatch(/^\//); // absolute path; basename varies in scratch worktrees
   });
 
   it("invokes /bin/zsh with the wrapper script path", () => {
