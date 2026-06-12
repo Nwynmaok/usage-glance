@@ -12,3 +12,9 @@ export interface LaunchAgentPlistOptions {
 }
 
 export declare function buildLaunchAgentPlist(opts: LaunchAgentPlistOptions): string;
+export declare function guiTarget(): string;
+export declare function serviceTarget(): string;
+export declare function resolveNpmPath(): string;
+export declare function resolveNodeMajorVersion(npmPath: string): number;
+export declare function assertNodeVersion(npmPath: string): void;
+export declare function runBuild(): void;

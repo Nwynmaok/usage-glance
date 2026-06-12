@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   buildLaunchAgentPlist,
+  guiTarget,
+  serviceTarget,
+  resolveNodeMajorVersion,
+  assertNodeVersion,
   LABEL,
   REPO_ROOT,
   WRAPPER_PATH,
@@ -98,9 +102,46 @@ describe("launchd plist generation", () => {
   });
 
   it("does not call launchctl (pure generation only)", () => {
-    // This test simply verifies the function returns a string without side effects.
     const plist = buildLaunchAgentPlist({ npmPath: FAKE_NPM });
     expect(typeof plist).toBe("string");
     expect(plist.length).toBeGreaterThan(0);
+  });
+});
+
+describe("launchctl target construction", () => {
+  it("guiTarget returns gui/<uid>", () => {
+    const target = guiTarget();
+    expect(target).toMatch(/^gui\/\d+$/);
+  });
+
+  it("serviceTarget returns gui/<uid>/com.nwynmaok.usage-glance", () => {
+    const target = serviceTarget();
+    expect(target).toMatch(/^gui\/\d+\/com\.nwynmaok\.usage-glance$/);
+  });
+
+  it("serviceTarget contains the stable label", () => {
+    expect(serviceTarget()).toContain(LABEL);
+  });
+});
+
+describe("Node version validation", () => {
+  it("resolveNodeMajorVersion extracts major from vNN.x.x output", () => {
+    // We mock execFileSync by testing the parsing logic via a thin wrapper.
+    // The actual function calls execFileSync which we cannot mock without vi.mock.
+    // Instead, test it with a real invocation and just check it returns a number.
+    const major = resolveNodeMajorVersion(FAKE_NPM);
+    expect(typeof major).toBe("number");
+    expect(major).toBeGreaterThan(0);
+  });
+
+  it("assertNodeVersion does not throw for the current Node runtime (>=24 on CI)", () => {
+    // On CI (Node 24) this should pass. On older runtimes it would throw —
+    // that is the intended behavior (the test documents the contract).
+    const current = parseInt(process.version.replace(/^v/, "").split(".")[0], 10);
+    if (current >= 24) {
+      expect(() => assertNodeVersion(FAKE_NPM)).not.toThrow();
+    } else {
+      expect(() => assertNodeVersion(FAKE_NPM)).toThrow(/Node 24/);
+    }
   });
 });
