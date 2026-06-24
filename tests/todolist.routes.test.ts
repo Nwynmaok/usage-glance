@@ -253,10 +253,18 @@ describe("POST /api/todolist/sync", () => {
       degraded: boolean;
       error: string;
       lastSyncAt: string;
+      recommendations: unknown[];
+      reviewCandidates: unknown[];
+      focusCap: number;
     }>();
     expect(body.degraded).toBe(true);
     expect(body.error).toContain("Notion API unavailable");
     expect(body.lastSyncAt).toBe(prevSyncAt);
+    expect(Array.isArray(body.recommendations)).toBe(true);
+    expect(Array.isArray(body.reviewCandidates)).toBe(true);
+    expect(typeof body.focusCap).toBe("number");
+    // prevTask has nextAction: null so it appears as a review candidate
+    expect(body.reviewCandidates).toHaveLength(1);
 
     // Cache on disk should still have old tasks
     const { readCache } = await import("../src/server/todolist/store.js");

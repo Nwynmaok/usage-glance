@@ -121,13 +121,18 @@ export async function todolistRoutes(
         opts.cacheFile
       );
 
+      const { recommendations, reviewCandidates, focusCap } = scoreTasks(
+        prevCache.tasks,
+        config
+      );
+
       return reply.send({
         lastSyncAt: prevCache.lastSyncAt,
         degraded: true,
         error: errorMsg,
-        focusCap: config.focus.dailyCap,
-        recommendations: [],
-        reviewCandidates: [],
+        focusCap,
+        recommendations,
+        reviewCandidates,
       });
     }
   });
