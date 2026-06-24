@@ -112,6 +112,15 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function currentWeekStr(): string {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const week = Math.ceil(
+    ((now.getTime() - jan1.getTime()) / 86_400_000 + jan1.getDay() + 1) / 7
+  );
+  return `${now.getFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
 function render(): void {
   root!.innerHTML = buildApp();
   attachHandlers();
@@ -289,7 +298,7 @@ function buildCadenceSection(): string {
 
   const startupDone = !!(c?.currentDay === today && c?.dailyStartupCompletedAt);
   const shutdownDone = !!(c?.currentDay === today && c?.dailyShutdownCompletedAt);
-  const weeklyDone = !!(c?.weeklyReviewCompletedAt);
+  const weeklyDone = !!(c?.currentWeek === currentWeekStr() && c?.weeklyReviewCompletedAt);
   const focusCount = selectedFocusIds.size;
 
   function cadenceBtn(id: string, label: string, done: boolean, doneTime?: string | null): string {
@@ -388,15 +397,16 @@ async function handleSync(): Promise<void> {
     const res = await fetch("/api/todolist/sync", { method: "POST" });
     const data = (await res.json()) as SyncPayload;
 
+    const configured = statusData?.configured ?? true;
     focusData = {
-      configured: statusData?.configured ?? true,
+      configured,
       lastSyncAt: data.lastSyncAt,
       degraded: data.degraded,
       error: data.error,
       focusCap: data.focusCap,
       recommendations: data.recommendations,
       reviewCandidates: data.reviewCandidates,
-      setupRequired: false,
+      setupRequired: !configured,
       syncRequired: false,
     };
 

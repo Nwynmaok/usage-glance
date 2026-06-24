@@ -121,13 +121,15 @@ export async function todolistRoutes(
         opts.cacheFile
       );
 
+      const stale = scoreTasks(prevCache.tasks, config, new Date());
+
       return reply.send({
         lastSyncAt: prevCache.lastSyncAt,
         degraded: true,
         error: errorMsg,
-        focusCap: config.focus.dailyCap,
-        recommendations: [],
-        reviewCandidates: [],
+        focusCap: stale.focusCap,
+        recommendations: stale.recommendations,
+        reviewCandidates: stale.reviewCandidates,
       });
     }
   });

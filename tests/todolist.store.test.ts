@@ -24,14 +24,15 @@ describe("todolist store", () => {
       }
     });
 
-    it("returns default cache when file is malformed JSON", async () => {
+    it("returns degraded cache when file is malformed JSON", async () => {
       const dir = await makeTmpDir();
       const file = join(dir, "cache.json");
       try {
         await writeFile(file, "{ not valid json }", "utf8");
         const cache = await readCache(file);
         expect(cache.tasks).toEqual([]);
-        expect(cache.degraded).toBe(false);
+        expect(cache.degraded).toBe(true);
+        expect(cache.error).toMatch(/malformed cache file/);
       } finally {
         await rm(dir, { recursive: true });
       }

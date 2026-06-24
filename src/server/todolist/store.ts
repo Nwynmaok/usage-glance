@@ -39,7 +39,15 @@ async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
 
 export async function readCache(cacheFile?: string): Promise<TodolistCache> {
   const file = cacheFile ?? resolvePaths().cacheFile;
-  return readJsonFile(file, { ...DEFAULT_CACHE, tasks: [] });
+  try {
+    const raw = await readFile(file, "utf8");
+    return JSON.parse(raw) as TodolistCache;
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      return { ...DEFAULT_CACHE, degraded: true, error: `malformed cache file: ${err.message}`, tasks: [] };
+    }
+    return { ...DEFAULT_CACHE, tasks: [] };
+  }
 }
 
 export async function writeCache(
