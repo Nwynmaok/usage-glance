@@ -4,6 +4,7 @@ import fastifyStatic from "@fastify/static";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { healthRoutes } from "./routes/health.js";
+import { todolistRoutes } from "./routes/todolist.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -16,6 +17,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(healthRoutes);
+  await app.register(todolistRoutes);
 
   return app;
 }
