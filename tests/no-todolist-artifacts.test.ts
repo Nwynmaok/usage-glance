@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { execSync } from "child_process";
 import { readFileSync } from "fs";
 
-// Files explicitly allowed to mention todolist terms (the cleanup note documents removals).
-const ALLOWLIST = new Set(["CLEANUP.md"]);
+// Files explicitly allowed to mention todolist terms:
+// - CLEANUP.md: documents what was removed
+// - this guard file: defines the forbidden terms itself
+const ALLOWLIST = new Set(["CLEANUP.md", "tests/no-todolist-artifacts.test.ts"]);
 
 // Terms that must not appear in tracked usage-glance source files.
 const FORBIDDEN_TERMS = [

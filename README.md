@@ -119,6 +119,67 @@ Returns server health:
 
 5. **Wrong Node/npm path** — The generated plist hard-codes the npm/node path discovered at install time. If the service fails after a Node version change, run `npm run service:uninstall` then `npm run service:install` again to regenerate the plist with the current Node 24-capable path.
 
+## Usage snapshot API
+
+### `GET /api/usage`
+
+Returns an array of `ProviderUsageSnapshot` values for Codex and Claude:
+
+```json
+[
+  {
+    "provider": "codex",
+    "state": "ok",
+    "source": {
+      "kind": "codex-cli-status-text",
+      "label": "Live local CLI-derived",
+      "confidence": "user-visible-cli",
+      "caveat": "Not provider-authoritative API data"
+    },
+    "windows": [
+      { "name": "5h", "percentRemaining": 82, "resetLabel": "15:18" },
+      { "name": "weekly", "percentRemaining": 36 }
+    ],
+    "updatedAt": "2026-06-27T17:45:00.000Z",
+    "stale": false
+  },
+  {
+    "provider": "claude",
+    "state": "manual",
+    "source": { "kind": "manual-dashboard-only", "label": "Manual/dashboard-only", ... },
+    "windows": [],
+    "stale": false,
+    "message": "Check usage manually: Claude Code `/usage`, or Claude.ai Settings > Usage."
+  }
+]
+```
+
+Responses are cached for 60 seconds; the local snapshot file is never read more often than that.
+
+## Codex local snapshot configuration
+
+Codex usage is read from a local JSON snapshot file. The default path is `data/provider-usage/codex.json` relative to the working directory. Override with the `CODEX_SNAPSHOT_PATH` environment variable.
+
+Snapshot format:
+
+```json
+{
+  "provider": "codex",
+  "source": "codex-cli-status-text",
+  "updatedAt": "2026-06-27T17:45:00.000Z",
+  "windows": [
+    { "name": "5h", "percentRemaining": 82, "resetLabel": "15:18" },
+    { "name": "weekly", "percentRemaining": 36 }
+  ],
+  "raw": "optional /status text excerpt"
+}
+```
+
+Write this file manually or via a script that captures `codex /status` output. The dashboard will show a stale indicator if the file is more than 5 minutes old.
+
 ## What is not implemented
 
-Usage collectors, provider log parsing, polling, usage cards, real dashboard data, and Tailscale configuration are intentionally out of scope for the current iteration. They will be added in future iterations. When provider percentages are introduced, they will be approximations derived from local data and will not reflect provider-authoritative figures.
+- **Fully automated provider-authoritative usage collection** — values shown are derived from local snapshots and are approximations, not real-time provider figures.
+- **Claude automated remaining percentages** — Claude usage requires manual checking. Use Claude Code `/usage` or Claude.ai Settings > Usage. Automated collection from local JSONL/session logs is not implemented in this version.
+- **Web scraping, external API calls, or data egress** — no usage data leaves the local machine.
+- **Tailscale configuration** — reach the dashboard remotely via your existing Tailscale setup; no additional configuration is provided here.
