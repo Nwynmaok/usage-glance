@@ -177,6 +177,97 @@ Snapshot format:
 
 Write this file manually or via a script that captures `codex /status` output. The dashboard will show a stale indicator if the file is more than 5 minutes old.
 
+## Generated usage snapshots
+
+### Snapshot location and schema
+
+Generated snapshots are written to:
+
+- `data/usage-snapshots/codex.json`
+- `data/usage-snapshots/claude.json`
+
+These are written atomically via a temp-file + rename to prevent partial reads. Schema:
+
+```json
+{
+  "provider": "codex",
+  "generatedAt": "2026-06-28T16:30:00.000Z",
+  "source": {
+    "script": "scripts/generate-codex-usage-snapshot.ts",
+    "type": "cli"
+  },
+  "status": "ok",
+  "staleAfterSeconds": 300,
+  "approximation": true,
+  "windows": [
+    { "name": "5h", "percentRemaining": 70, "resetsAt": "2026-06-28T20:00:00.000Z" },
+    { "name": "weekly", "percentRemaining": 45 }
+  ]
+}
+```
+
+`status` is one of: `ok`, `empty`, `partial`, `error`. When the provider cannot be reached, a structured `error` field is included with a stable `code` (e.g. `CLI_UNAVAILABLE`, `TIMEOUT`).
+
+### Generation scripts
+
+| Script | npm script | Timeout |
+|---|---|---|
+| `scripts/generate-codex-usage-snapshot.ts` | `npm run snapshot:codex` | 15 s |
+| `scripts/generate-claude-usage-snapshot.ts` | `npm run snapshot:claude` | 30 s |
+
+The Codex script runs `codex /status` and writes a snapshot. If the CLI is unavailable, an `error` snapshot is written instead. The Claude script always writes a `partial` / `MANUAL_REFRESH_REQUIRED` snapshot because Claude Code automation is not supported non-interactively.
+
+### Refresh API
+
+| Method | URL | Effect |
+|---|---|---|
+| `POST` | `/api/usage/codex/refresh` | Runs the Codex script and returns snapshot metadata |
+| `POST` | `/api/usage/claude/refresh` | Runs the Claude script and returns snapshot metadata or manual state |
+
+Refresh endpoints are POST-only (explicit user action). They never expose raw CLI stdout/stderr. Timeout constants: Codex 15 s, Claude 30 s.
+
+Example success response:
+
+```json
+{
+  "provider": "codex",
+  "status": "ok",
+  "generatedAt": "2026-06-28T16:31:00.000Z",
+  "staleAfterSeconds": 300,
+  "snapshotLocation": "data/usage-snapshots/codex.json",
+  "error": null
+}
+```
+
+Error response (sanitized, no raw CLI output):
+
+```json
+{
+  "provider": "codex",
+  "status": "error",
+  "generatedAt": null,
+  "staleAfterSeconds": null,
+  "snapshotLocation": null,
+  "error": { "code": "CLI_UNAVAILABLE", "message": "Script binary not found" }
+}
+```
+
+Stable error codes: `CLI_UNAVAILABLE`, `TIMEOUT`, `NON_ZERO_EXIT`, `NO_OUTPUT`, `MALFORMED_OUTPUT`, `SNAPSHOT_READ_FAILED`, `SNAPSHOT_WRITE_FAILED`, `PERMISSION_DENIED`, `MANUAL_REFRESH_REQUIRED`, `UNSUPPORTED_AUTOMATION`.
+
+### Claude automation limitation
+
+Claude Code's `/usage` command requires an interactive TTY and cannot be run non-interactively. The `generate-claude-usage-snapshot.ts` script always writes a `partial` / `MANUAL_REFRESH_REQUIRED` snapshot. Use Claude Code `/usage` or Claude.ai Settings > Usage to check Claude usage manually.
+
+### Frontend refresh controls
+
+Each provider card has a **Refresh** button. Clicking it POSTs to the corresponding refresh endpoint and shows:
+
+- **Refreshing…** while pending
+- **Updated** on success (card data reloads from `GET /api/usage`)
+- A sanitized actionable error message on failure (timeout, missing CLI, manual-only, etc.)
+
+No background polling is added; refreshes are always explicit user actions.
+
 ## What is not implemented
 
 - **Fully automated provider-authoritative usage collection** — values shown are derived from local snapshots and are approximations, not real-time provider figures.
