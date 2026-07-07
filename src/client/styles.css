@@ -31,26 +31,128 @@ body {
   letter-spacing: -0.01em;
 }
 
-.notice {
+/* Usage cards grid */
+.usage-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.usage-card {
   background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.25rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 1rem 1.125rem;
 }
 
-.notice h2 {
-  font-size: 1.125rem;
+/* State border colors */
+.usage-card.state-ok    { border-color: #22c55e; }
+.usage-card.state-warn  { border-color: #eab308; }
+.usage-card.state-critical { border-color: #ef4444; }
+.usage-card.state-unknown  { border-color: #9ca3af; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.provider-name {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  flex: 1;
+}
+
+.state-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #9ca3af;
+}
+
+.state-ok    .state-dot { background: #22c55e; }
+.state-warn  .state-dot { background: #eab308; }
+.state-critical .state-dot { background: #ef4444; }
+
+.stale-badge {
+  font-size: 0.7rem;
   font-weight: 600;
-  margin-bottom: 0.75rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  line-height: 1.5;
 }
 
-.notice p {
-  color: #444;
-  margin-bottom: 0.75rem;
+/* Window rows */
+.card-windows {
+  margin-bottom: 0.5rem;
 }
 
-.notice p:last-child {
-  margin-bottom: 0;
+.window-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.1rem 0;
+}
+
+.window-name {
+  font-weight: 600;
+  min-width: 3rem;
+}
+
+.window-pct {
+  font-variant-numeric: tabular-nums;
+}
+
+.window-pct.unknown {
+  color: #9ca3af;
+}
+
+.window-reset {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.window-msg {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Card meta row */
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.375rem;
+}
+
+.source-label {
+  font-weight: 500;
+}
+
+.updated-at {
+  margin-left: auto;
+}
+
+/* Caveat text */
+.card-caveat {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 0.375rem;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 0.375rem;
+}
+
+.load-error {
+  color: #ef4444;
+  font-size: 0.875rem;
 }
 
 @media (min-width: 600px) {
@@ -60,5 +162,14 @@ body {
 
   .site-header h1 {
     font-size: 1.75rem;
+  }
+
+  .usage-cards {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .usage-card {
+    flex: 1 1 280px;
   }
 }
