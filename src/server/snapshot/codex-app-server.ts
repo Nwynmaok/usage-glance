@@ -119,7 +119,9 @@ export function readCodexRateLimits(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Rat
           finish({
             ok: false,
             code: authNeeded ? 'AUTH_REQUIRED' : 'NON_ZERO_EXIT',
-            message: msg.error.message,
+            message: authNeeded
+              ? 'codex login required'
+              : 'codex app-server returned an error',
           });
           return;
         }
