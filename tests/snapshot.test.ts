@@ -499,9 +499,15 @@ describe('sanitizeRefreshError', () => {
     expect(msg.toLowerCase()).toContain('timed out');
   });
 
-  it('maps MANUAL_REFRESH_REQUIRED to manual instruction', () => {
+  it('maps MANUAL_REFRESH_REQUIRED to statusLine capture instruction', () => {
     const msg = sanitizeRefreshError('MANUAL_REFRESH_REQUIRED', 'fallback');
-    expect(msg.toLowerCase()).toContain('manual');
+    expect(msg.toLowerCase()).toContain('claude code');
+    expect(msg).not.toBe('fallback');
+  });
+
+  it('maps AUTH_REQUIRED to codex login instruction', () => {
+    const msg = sanitizeRefreshError('AUTH_REQUIRED', 'fallback');
+    expect(msg.toLowerCase()).toContain('codex:login');
   });
 
   it('maps UNSUPPORTED_AUTOMATION to actionable message', () => {

@@ -153,8 +153,9 @@ async function triggerRefresh(provider: string): Promise<void> {
 export function sanitizeRefreshError(code: string, fallback: string): string {
   switch (code) {
     case 'CLI_UNAVAILABLE': return 'CLI not found. Ensure codex is installed and on PATH.';
+    case 'AUTH_REQUIRED': return 'Codex not signed in. Run `npm run codex:login` once to authenticate.';
     case 'TIMEOUT': return 'Timed out. Try again.';
-    case 'MANUAL_REFRESH_REQUIRED': return 'Manual refresh required. Use Claude Code `/usage` or Claude.ai Settings > Usage.';
+    case 'MANUAL_REFRESH_REQUIRED': return 'No Claude usage captured yet. Use Claude Code (statusLine enabled), then refresh.';
     case 'UNSUPPORTED_AUTOMATION': return 'Automated refresh is not supported for this provider.';
     case 'PERMISSION_DENIED': return 'Permission denied writing snapshot. Check data/usage-snapshots/ permissions.';
     case 'SNAPSHOT_READ_FAILED': return 'Snapshot was not written. Try again.';
