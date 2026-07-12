@@ -2,3 +2,5 @@ node_modules/
 dist/
 public/assets/
 .env
+data/
+.DS_Store

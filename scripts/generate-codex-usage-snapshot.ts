@@ -1,11 +1,9 @@
-import { spawnSync } from 'child_process';
 import { writeSnapshotAtomically } from '../src/server/snapshot/atomic-writer.js';
-import { parseCodexStatusText } from '../src/server/collectors/codex.js';
-import type { GeneratedUsageSnapshot, SnapshotErrorCode } from '../src/server/snapshot/types.js';
+import { readCodexRateLimits, type RateLimitWindow } from '../src/server/snapshot/codex-app-server.js';
+import type { GeneratedUsageSnapshot, GeneratedSnapshotWindow, SnapshotErrorCode } from '../src/server/snapshot/types.js';
 
 const SNAPSHOT_PATH = 'data/usage-snapshots/codex.json';
 const SCRIPT_NAME = 'scripts/generate-codex-usage-snapshot.ts';
-const CLI_TIMEOUT_MS = 10_000;
 
 function makeErrorSnapshot(code: SnapshotErrorCode, message: string): GeneratedUsageSnapshot {
   return {
@@ -19,37 +17,49 @@ function makeErrorSnapshot(code: SnapshotErrorCode, message: string): GeneratedU
   };
 }
 
-function run(): void {
-  const result = spawnSync('codex', ['/status'], {
-    encoding: 'utf-8',
-    timeout: CLI_TIMEOUT_MS,
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
+/** codex windows are named by duration; fall back to position. */
+function windowName(durationMins: number | null | undefined, fallback: string): string {
+  if (durationMins == null) return fallback;
+  if (durationMins === 300) return '5h';
+  if (durationMins === 10080) return 'weekly';
+  if (durationMins % 1440 === 0) return `${durationMins / 1440}d`;
+  if (durationMins % 60 === 0) return `${durationMins / 60}h`;
+  return `${durationMins}m`;
+}
 
-  if (result.error) {
-    const code = (result.error as NodeJS.ErrnoException).code;
-    const errorCode: SnapshotErrorCode = code === 'ENOENT' ? 'CLI_UNAVAILABLE' : 'NON_ZERO_EXIT';
-    writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot(errorCode, 'codex CLI not available'));
+/** Unix timestamp (s or ms) -> ISO string. */
+function toIso(resetsAt: number | null | undefined): string | undefined {
+  if (resetsAt == null) return undefined;
+  const ms = resetsAt < 1e12 ? resetsAt * 1000 : resetsAt;
+  const d = new Date(ms);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+function toWindow(w: RateLimitWindow | null | undefined, fallbackName: string): GeneratedSnapshotWindow | null {
+  if (!w || typeof w.usedPercent !== 'number') return null;
+  const window: GeneratedSnapshotWindow = {
+    name: windowName(w.windowDurationMins, fallbackName),
+    percentRemaining: Math.max(0, Math.min(100, 100 - w.usedPercent)),
+    unit: 'percent',
+  };
+  const resetsAt = toIso(w.resetsAt);
+  if (resetsAt) window.resetsAt = resetsAt;
+  return window;
+}
+
+async function run(): Promise<void> {
+  const result = await readCodexRateLimits();
+
+  if (!result.ok) {
+    writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot(result.code, result.message));
     return;
   }
 
-  if (result.signal === 'SIGTERM' || result.status === null) {
-    writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot('TIMEOUT', 'codex /status timed out'));
-    return;
-  }
+  const { primary, secondary } = result.snapshot;
+  const windows = [toWindow(primary, 'primary'), toWindow(secondary, 'secondary')].filter(
+    (w): w is GeneratedSnapshotWindow => w !== null,
+  );
 
-  if (result.status !== 0) {
-    writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot('NON_ZERO_EXIT', 'codex /status returned non-zero exit'));
-    return;
-  }
-
-  const stdout = result.stdout ?? '';
-  if (!stdout.trim()) {
-    writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot('NO_OUTPUT', 'codex /status produced no output'));
-    return;
-  }
-
-  const windows = parseCodexStatusText(stdout);
   if (windows.length === 0) {
     writeSnapshotAtomically(SNAPSHOT_PATH, {
       provider: 'codex',
@@ -58,7 +68,7 @@ function run(): void {
       status: 'empty',
       staleAfterSeconds: 300,
       approximation: true,
-      message: 'No usage windows found in codex /status output',
+      message: 'codex reported no rate-limit windows',
     });
     return;
   }
@@ -66,16 +76,16 @@ function run(): void {
   writeSnapshotAtomically(SNAPSHOT_PATH, {
     provider: 'codex',
     generatedAt: new Date().toISOString(),
-    source: { script: SCRIPT_NAME, type: 'cli' },
+    source: {
+      script: SCRIPT_NAME,
+      type: 'cli',
+      detail: result.snapshot.planType ? `plan: ${result.snapshot.planType}` : undefined,
+    },
     status: 'ok',
     staleAfterSeconds: 300,
     approximation: true,
-    windows: windows.map((w) => ({
-      name: w.name,
-      percentRemaining: w.percentRemaining,
-      resetsAt: w.resetAt,
-    })),
+    windows,
   });
 }
 
-run();
+void run();

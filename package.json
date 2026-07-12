@@ -20,7 +20,8 @@
     "service:uninstall": "node scripts/launchd.mjs uninstall",
     "service:verify": "node scripts/launchd.mjs verify",
     "snapshot:codex": "tsx scripts/generate-codex-usage-snapshot.ts",
-    "snapshot:claude": "tsx scripts/generate-claude-usage-snapshot.ts"
+    "snapshot:claude": "tsx scripts/generate-claude-usage-snapshot.ts",
+    "codex:login": "tsx scripts/codex-login.ts"
   },
   "dependencies": {
     "@fastify/static": "^8.0.0",

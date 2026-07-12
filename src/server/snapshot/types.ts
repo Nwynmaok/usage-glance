@@ -8,7 +8,8 @@ export type SnapshotErrorCode =
   | 'SNAPSHOT_WRITE_FAILED'
   | 'PERMISSION_DENIED'
   | 'MANUAL_REFRESH_REQUIRED'
-  | 'UNSUPPORTED_AUTOMATION';
+  | 'UNSUPPORTED_AUTOMATION'
+  | 'AUTH_REQUIRED';
 
 export type GeneratedSnapshotStatus = 'ok' | 'empty' | 'partial' | 'error';
 export type GeneratedSnapshotSourceType = 'local-state' | 'cli' | 'manual' | 'unsupported';
