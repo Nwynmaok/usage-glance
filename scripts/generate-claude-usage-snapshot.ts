@@ -1,10 +1,12 @@
 import { readFileSync } from 'fs';
 import { writeSnapshotAtomically } from '../src/server/snapshot/atomic-writer.js';
-import type { GeneratedUsageSnapshot, GeneratedSnapshotWindow } from '../src/server/snapshot/types.js';
+import { fetchClaudeUsageFromApi } from '../src/server/snapshot/claude-usage-api.js';
+import type { GeneratedUsageSnapshot, GeneratedSnapshotWindow, SnapshotErrorCode } from '../src/server/snapshot/types.js';
 
 const SNAPSHOT_PATH = 'data/usage-snapshots/claude.json';
 const CAPTURE_PATH = process.env['CLAUDE_STATUSLINE_PATH'] ?? 'data/provider-usage/claude-statusline.json';
 const SCRIPT_NAME = 'scripts/generate-claude-usage-snapshot.ts';
+const API_STALE_AFTER_SECONDS = 300;
 const STALE_AFTER_SECONDS = 900;
 
 interface CaptureWindow {
@@ -16,11 +18,15 @@ interface CaptureFile {
   rate_limits?: { five_hour?: CaptureWindow; seven_day?: CaptureWindow };
 }
 
-function manualSnapshot(message: string): GeneratedUsageSnapshot {
+function manualSnapshot(message: string, fallbackReason: SnapshotErrorCode): GeneratedUsageSnapshot {
   return {
     provider: 'claude',
     generatedAt: new Date().toISOString(),
-    source: { script: SCRIPT_NAME, type: 'local-state', detail: 'Claude Code statusLine capture' },
+    source: {
+      script: SCRIPT_NAME,
+      type: 'local-state',
+      detail: `Claude Code statusLine capture (usage API: ${fallbackReason})`,
+    },
     status: 'partial',
     staleAfterSeconds: STALE_AFTER_SECONDS,
     approximation: true,
@@ -46,14 +52,15 @@ function toWindow(name: string, w: CaptureWindow | undefined): GeneratedSnapshot
   return window;
 }
 
-function run(): void {
+/** Fallback: last statusLine capture, freshness tied to Claude Code activity. */
+function runFromStatuslineCapture(fallbackReason: SnapshotErrorCode): void {
   let capture: CaptureFile;
   try {
     capture = JSON.parse(readFileSync(CAPTURE_PATH, 'utf-8')) as CaptureFile;
   } catch {
     writeSnapshotAtomically(
       SNAPSHOT_PATH,
-      manualSnapshot('No Claude usage captured yet. Use Claude Code once (rate limits appear after the first response) with the usage-glance statusLine enabled.'),
+      manualSnapshot('No Claude usage captured yet. Use Claude Code once (rate limits appear after the first response) with the usage-glance statusLine enabled.', fallbackReason),
     );
     return;
   }
@@ -66,7 +73,7 @@ function run(): void {
   if (windows.length === 0) {
     writeSnapshotAtomically(
       SNAPSHOT_PATH,
-      manualSnapshot('Claude statusLine produced no rate-limit windows yet. Use Claude Code to populate them.'),
+      manualSnapshot('Claude statusLine produced no rate-limit windows yet. Use Claude Code to populate them.', fallbackReason),
     );
     return;
   }
@@ -77,7 +84,11 @@ function run(): void {
   writeSnapshotAtomically(SNAPSHOT_PATH, {
     provider: 'claude',
     generatedAt,
-    source: { script: SCRIPT_NAME, type: 'local-state', detail: 'Claude Code statusLine capture' },
+    source: {
+      script: SCRIPT_NAME,
+      type: 'local-state',
+      detail: `Claude Code statusLine capture (usage API: ${fallbackReason})`,
+    },
     status: 'ok',
     staleAfterSeconds: STALE_AFTER_SECONDS,
     approximation: true,
@@ -85,4 +96,23 @@ function run(): void {
   });
 }
 
-run();
+async function run(): Promise<void> {
+  const direct = await fetchClaudeUsageFromApi();
+
+  if (direct.ok) {
+    writeSnapshotAtomically(SNAPSHOT_PATH, {
+      provider: 'claude',
+      generatedAt: new Date().toISOString(),
+      source: { script: SCRIPT_NAME, type: 'api', detail: 'Anthropic OAuth usage API' },
+      status: 'ok',
+      staleAfterSeconds: API_STALE_AFTER_SECONDS,
+      approximation: true,
+      windows: direct.windows,
+    });
+    return;
+  }
+
+  runFromStatuslineCapture(direct.code);
+}
+
+void run();
