@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { EventEmitter } from 'events';
 
 import { validateGeneratedSnapshot, readGeneratedSnapshot } from '../src/server/snapshot/reader.js';
+import { bridgeGeneratedSnapshot } from '../src/server/snapshot/bridge.js';
 import { writeSnapshotAtomically } from '../src/server/snapshot/atomic-writer.js';
 import { runScript, CODEX_REFRESH_TIMEOUT_MS, CLAUDE_REFRESH_TIMEOUT_MS } from '../src/server/snapshot/process-runner.js';
 import { renderCard, renderRefreshSection, sanitizeRefreshError } from '../src/client/main.js';
@@ -577,5 +578,25 @@ describe('Generated snapshot shapes', () => {
       error: { code: 'MANUAL_REFRESH_REQUIRED', message: 'Manual refresh required' },
     };
     expect(validateGeneratedSnapshot(snap)).toBe(true);
+  });
+
+  it('api-source snapshot is schema-valid and bridges with provider-api metadata', () => {
+    const snap: GeneratedUsageSnapshot = {
+      provider: 'claude',
+      generatedAt: new Date().toISOString(),
+      source: { script: 'scripts/generate-claude-usage-snapshot.ts', type: 'api', detail: 'Anthropic OAuth usage API' },
+      status: 'ok',
+      staleAfterSeconds: 300,
+      approximation: true,
+      windows: [{ name: '5h', percentRemaining: 94 }, { name: 'weekly', percentRemaining: 65 }],
+    };
+    expect(validateGeneratedSnapshot(snap)).toBe(true);
+
+    const bridged = bridgeGeneratedSnapshot(snap);
+    expect(bridged.source.kind).toBe('provider-api');
+    expect(bridged.source.label).toBe('Provider usage API');
+    expect(bridged.source.caveat).toBe('Provider-reported via undocumented endpoint');
+    expect(bridged.state).toBe('ok');
+    expect(bridged.stale).toBe(false);
   });
 });

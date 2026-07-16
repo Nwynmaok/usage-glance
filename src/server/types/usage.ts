@@ -1,6 +1,7 @@
 export type ProviderId = 'codex' | 'claude';
 
 export type UsageSourceKind =
+  | 'provider-api'
   | 'local-json-snapshot'
   | 'codex-cli-status-text'
   | 'codex-statusline-derived'

@@ -1,6 +1,7 @@
 import { writeSnapshotAtomically } from '../src/server/snapshot/atomic-writer.js';
-import { readCodexRateLimits, type RateLimitWindow } from '../src/server/snapshot/codex-app-server.js';
-import type { GeneratedUsageSnapshot, GeneratedSnapshotWindow, SnapshotErrorCode } from '../src/server/snapshot/types.js';
+import { readCodexRateLimits, type RateLimitWindow, type RateLimitsResult } from '../src/server/snapshot/codex-app-server.js';
+import { fetchCodexUsageFromApi } from '../src/server/snapshot/codex-usage-api.js';
+import type { GeneratedUsageSnapshot, GeneratedSnapshotWindow, GeneratedSnapshotSourceType, SnapshotErrorCode } from '../src/server/snapshot/types.js';
 
 const SNAPSHOT_PATH = 'data/usage-snapshots/codex.json';
 const SCRIPT_NAME = 'scripts/generate-codex-usage-snapshot.ts';
@@ -48,14 +49,25 @@ function toWindow(w: RateLimitWindow | null | undefined, fallbackName: string): 
 }
 
 async function run(): Promise<void> {
-  const result = await readCodexRateLimits();
+  // Direct ChatGPT usage API first; app-server fallback also refreshes a stale
+  // auth.json token as a side effect, healing the direct path for next time.
+  let result: RateLimitsResult = await fetchCodexUsageFromApi();
+  let sourceType: GeneratedSnapshotSourceType = 'api';
+  let sourceDetail = 'ChatGPT usage API';
+
+  if (!result.ok) {
+    const apiFailure = result.code;
+    result = await readCodexRateLimits();
+    sourceType = 'cli';
+    sourceDetail = `codex app-server (usage API: ${apiFailure})`;
+  }
 
   if (!result.ok) {
     writeSnapshotAtomically(SNAPSHOT_PATH, makeErrorSnapshot(result.code, result.message));
     return;
   }
 
-  const { primary, secondary } = result.snapshot;
+  const { primary, secondary, planType } = result.snapshot;
   const windows = [toWindow(primary, 'primary'), toWindow(secondary, 'secondary')].filter(
     (w): w is GeneratedSnapshotWindow => w !== null,
   );
@@ -64,7 +76,7 @@ async function run(): Promise<void> {
     writeSnapshotAtomically(SNAPSHOT_PATH, {
       provider: 'codex',
       generatedAt: new Date().toISOString(),
-      source: { script: SCRIPT_NAME, type: 'cli' },
+      source: { script: SCRIPT_NAME, type: sourceType, detail: sourceDetail },
       status: 'empty',
       staleAfterSeconds: 300,
       approximation: true,
@@ -78,8 +90,8 @@ async function run(): Promise<void> {
     generatedAt: new Date().toISOString(),
     source: {
       script: SCRIPT_NAME,
-      type: 'cli',
-      detail: result.snapshot.planType ? `plan: ${result.snapshot.planType}` : undefined,
+      type: sourceType,
+      detail: planType ? `${sourceDetail}; plan: ${planType}` : sourceDetail,
     },
     status: 'ok',
     staleAfterSeconds: 300,

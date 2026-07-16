@@ -40,7 +40,8 @@ export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderU
   const state = stale ? 'unknown' : stateFromSnapshot(snap, windows);
 
   const sourceKind: ProviderUsageSnapshot['source']['kind'] =
-    snap.source.type === 'local-state' ? 'local-json-snapshot'
+    snap.source.type === 'api' ? 'provider-api'
+    : snap.source.type === 'local-state' ? 'local-json-snapshot'
     : snap.source.type === 'cli' ? 'codex-cli-status-text'
     : snap.source.type === 'manual' ? 'manual-dashboard-only'
     : 'unavailable';
@@ -49,10 +50,16 @@ export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderU
     snap.source.type === 'manual' || snap.source.type === 'unsupported' ? 'manual' : 'user-visible-cli';
 
   const sourceLabel =
-    snap.source.type === 'cli' ? 'Live local CLI-derived'
+    snap.source.type === 'api' ? 'Provider usage API'
+    : snap.source.type === 'cli' ? 'Live local CLI-derived'
     : snap.source.type === 'local-state' ? 'Local snapshot'
     : snap.source.type === 'manual' ? 'Manual/dashboard-only'
     : 'Unavailable';
+
+  const caveat =
+    snap.source.type === 'api'
+      ? 'Provider-reported via undocumented endpoint'
+      : 'Not provider-authoritative API data';
 
   return {
     provider: snap.provider,
@@ -61,7 +68,7 @@ export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderU
       kind: sourceKind,
       label: sourceLabel,
       confidence,
-      caveat: 'Not provider-authoritative API data',
+      caveat,
     },
     windows,
     updatedAt: snap.generatedAt,

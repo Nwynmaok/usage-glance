@@ -9,10 +9,11 @@ export type SnapshotErrorCode =
   | 'PERMISSION_DENIED'
   | 'MANUAL_REFRESH_REQUIRED'
   | 'UNSUPPORTED_AUTOMATION'
-  | 'AUTH_REQUIRED';
+  | 'AUTH_REQUIRED'
+  | 'HTTP_ERROR';
 
 export type GeneratedSnapshotStatus = 'ok' | 'empty' | 'partial' | 'error';
-export type GeneratedSnapshotSourceType = 'local-state' | 'cli' | 'manual' | 'unsupported';
+export type GeneratedSnapshotSourceType = 'api' | 'local-state' | 'cli' | 'manual' | 'unsupported';
 
 export interface GeneratedSnapshotWindow {
   name: string;

@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import type { GeneratedUsageSnapshot } from './types.js';
 
 const VALID_STATUSES = new Set(['ok', 'empty', 'partial', 'error']);
-const VALID_SOURCE_TYPES = new Set(['local-state', 'cli', 'manual', 'unsupported']);
+const VALID_SOURCE_TYPES = new Set(['api', 'local-state', 'cli', 'manual', 'unsupported']);
 
 export function validateGeneratedSnapshot(data: unknown): data is GeneratedUsageSnapshot {
   if (typeof data !== 'object' || data === null) return false;
