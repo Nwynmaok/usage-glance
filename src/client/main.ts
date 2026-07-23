@@ -77,11 +77,14 @@ export function renderCard(snap: ProviderUsageSnapshot, refresh: RefreshState = 
   const updatedStr = formatUpdatedAt(snap.updatedAt, snap.stale);
   const staleTag = snap.stale ? '<span class="stale-badge">stale</span>' : '';
 
-  const windows = snap.windows.length > 0
-    ? snap.windows.map(renderWindow).join('')
-    : snap.message
+  const windowRows = snap.windows.length > 0 ? snap.windows.map(renderWindow).join('') : '';
+  // Show the sanitized message when there is nothing else to show, OR whenever
+  // the card is stale — so stale last-known numbers always carry actionable
+  // guidance rather than sitting silently behind a "stale" badge.
+  const messageRow = snap.message && (snap.windows.length === 0 || snap.stale)
     ? `<div class="window-row"><span class="window-msg">${snap.message}</span></div>`
     : '';
+  const windows = windowRows + messageRow;
 
   const caveat = snap.source.kind !== 'unavailable'
     ? `<p class="card-caveat">${snap.source.caveat}</p>`

@@ -156,6 +156,36 @@ Returns an array of `ProviderUsageSnapshot` values for Codex and Claude:
 
 Responses are cached for 60 seconds; the local snapshot file is never read more often than that.
 
+#### Freshness semantics and card-visible behavior
+
+Each snapshot carries its own freshness budget. A snapshot is **stale** when
+`now - generatedAt > staleAfterSeconds` (the generated-snapshot budget is 300 s / 5 min
+for API and Codex CLI sources, 900 s / 15 min for the Claude statusLine fallback). Freshness
+is per-provider and computed at read time, independent of `/healthz` — so `/healthz` can be
+`ok` while `/api/usage` reports one or both providers stale.
+
+When a snapshot is stale, `GET /api/usage` returns it with:
+
+- `stale: true`
+- `state: "unknown"` (last-known percentages are still returned in `windows`, but the traffic-light
+  state is suppressed because the numbers may no longer be accurate)
+- a sanitized, actionable `message`. Any existing sanitized guidance (e.g. the Claude
+  `MANUAL_REFRESH_REQUIRED` instruction) is preserved; otherwise a generic
+  `"Snapshot is older than N min. Click Refresh to update, or check the provider directly."`
+  is attached. This message is derived only from the snapshot's own metadata — it never contains
+  raw provider output, error text, or credentials.
+
+The card reflects this directly:
+
+- A **stale** badge appears next to the provider name and the update time is suffixed `(stale)`.
+- Last-known window numbers stay visible, and the actionable `message` is shown **alongside** them
+  (not only when there are no windows) so a stale card is never silent, unexplained old numbers.
+- Clicking **Refresh** runs the provider's generation script. On success a snapshot with a current
+  `generatedAt` is written, so the next `GET /api/usage` clears `stale` and drops the generic
+  guidance (stale-to-refreshed). If the refresh cannot obtain fresh data (e.g. Claude's usage API
+  is unavailable and the statusLine capture is old), the card stays honestly stale with actionable
+  guidance rather than showing a false "fresh" state.
+
 ## Codex local snapshot configuration
 
 Codex usage is read from a local JSON snapshot file. The default path is `data/provider-usage/codex.json` relative to the working directory. Override with the `CODEX_SNAPSHOT_PATH` environment variable.
@@ -215,7 +245,7 @@ These are written atomically via a temp-file + rename to prevent partial reads. 
 | `scripts/generate-codex-usage-snapshot.ts` | `npm run snapshot:codex` | 15 s |
 | `scripts/generate-claude-usage-snapshot.ts` | `npm run snapshot:claude` | 30 s |
 
-The Codex script runs `codex /status` and writes a snapshot. If the CLI is unavailable, an `error` snapshot is written instead. The Claude script always writes a `partial` / `MANUAL_REFRESH_REQUIRED` snapshot because Claude Code automation is not supported non-interactively.
+The Codex script tries the ChatGPT usage API first, falling back to the `codex app-server`; if both are unavailable an `error` snapshot is written. The Claude script tries the Anthropic OAuth usage API first (fresh `ok` snapshot, 5 min budget), falls back to the last Claude Code statusLine capture (`ok`, 15 min budget, `generatedAt` anchored to the capture time so freshness tracks real Claude Code activity), and only writes a `partial` / `MANUAL_REFRESH_REQUIRED` snapshot when neither source yields usable data.
 
 ### Refresh API
 
@@ -256,7 +286,14 @@ Stable error codes: `CLI_UNAVAILABLE`, `TIMEOUT`, `NON_ZERO_EXIT`, `NO_OUTPUT`, 
 
 ### Claude automation limitation
 
-Claude Code's `/usage` command requires an interactive TTY and cannot be run non-interactively. The `generate-claude-usage-snapshot.ts` script always writes a `partial` / `MANUAL_REFRESH_REQUIRED` snapshot. Use Claude Code `/usage` or Claude.ai Settings > Usage to check Claude usage manually.
+Claude Code's interactive `/usage` command requires a TTY and cannot be scripted. The
+`generate-claude-usage-snapshot.ts` script therefore relies on the Anthropic OAuth usage API and,
+as a fallback, the Claude Code statusLine capture. When neither is available it writes a `partial`
+/ `MANUAL_REFRESH_REQUIRED` snapshot whose message directs you to use Claude Code (with the
+usage-glance statusLine enabled) or Claude.ai Settings > Usage. Because the statusLine fallback
+anchors `generatedAt` to the capture time, a Claude card can be stale immediately after a refresh
+if Claude Code has not been used recently — in that case the card shows the stale badge plus
+actionable guidance rather than a false fresh state.
 
 ### Frontend refresh controls
 
