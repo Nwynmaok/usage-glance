@@ -100,17 +100,20 @@ describe('fetchCodexUsageFromApi', () => {
     }
   });
 
-  it('maps other HTTP failures to HTTP_ERROR with status code only', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(RAW_ERROR_BODY, 500)));
+  it.each([418, 429, 500, 503])(
+    'maps other HTTP failures to HTTP_ERROR with the status code only (%i)',
+    async (status) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(RAW_ERROR_BODY, status)));
 
-    const result = await fetchCodexUsageFromApi(1000, VALID_AUTH);
+      const result = await fetchCodexUsageFromApi(1000, VALID_AUTH);
 
-    expect(result).toMatchObject({ ok: false, code: 'HTTP_ERROR' });
-    if (!result.ok) {
-      expect(result.message).toContain('500');
-      expect(result.message).not.toContain('user-secret-999');
-    }
-  });
+      expect(result).toMatchObject({ ok: false, code: 'HTTP_ERROR' });
+      if (!result.ok) {
+        expect(result.message).toBe(`Codex usage API returned HTTP ${status}`);
+        expect(result.message).not.toContain('user-secret-999');
+      }
+    },
+  );
 
   it('maps a body without rate_limit to MALFORMED_OUTPUT', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ plan_type: 'plus' })));

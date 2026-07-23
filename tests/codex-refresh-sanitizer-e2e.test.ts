@@ -32,7 +32,11 @@ import {
   CODEX_APP_SERVER_ERROR_PAIRS,
   CODEX_APP_SERVER_ERROR_MESSAGES,
 } from '../src/server/snapshot/codex-app-server.js';
-import { CODEX_USAGE_API_ERROR_PAIRS } from '../src/server/snapshot/codex-usage-api.js';
+import {
+  CODEX_USAGE_API_ERROR_PAIRS,
+  CODEX_USAGE_API_HTTP_ERROR_STATUSES,
+  codexUsageApiHttpErrorMessage,
+} from '../src/server/snapshot/codex-usage-api.js';
 import { PROCESS_RUNNER_ERROR_PAIRS } from '../src/server/snapshot/process-runner.js';
 import { SNAPSHOT_READ_FAILED_ERROR } from '../src/server/routes/usage.js';
 
@@ -186,11 +190,15 @@ describe('refresh API and /api/usage surfaces', () => {
 });
 
 describe('UI refresh error state', () => {
-  // Every (code, message) pair the codex refresh path can hand the client is
-  // derived directly from the exported mappings in the modules that emit them —
-  // codex-usage-api.ts, codex-app-server.ts, process-runner.ts, and the refresh
-  // route in usage.ts. Consuming the same literals production ships means this
-  // proof cannot silently drift when a message is added or changed.
+  // Every failure the codex refresh path can hand the client is derived directly
+  // from the exported mappings in the modules that emit them — codex-usage-api.ts,
+  // codex-app-server.ts, process-runner.ts, and the refresh route in usage.ts.
+  // Those modules enumerate fixed-literal pairs exhaustively; the sole templated
+  // failure — codex-usage-api's HTTP_ERROR family, whose message interpolates only
+  // a numeric status — is represented here by CODEX_USAGE_API_ERROR_PAIRS' concrete
+  // witnesses (404/418/500/503) and additionally proven as a family below. Consuming
+  // the same literals production ships means this proof cannot silently drift when a
+  // message is added or changed.
   const serverPairs: ReadonlyArray<{ code: string; message: string }> = [
     ...CODEX_USAGE_API_ERROR_PAIRS,
     ...CODEX_APP_SERVER_ERROR_PAIRS,
@@ -210,6 +218,29 @@ describe('UI refresh error state', () => {
       expect(text.includes(SECRET)).toBe(false);
       expect(text.includes(CREDENTIAL)).toBe(false);
     }
+  });
+
+  it('proves the templated HTTP_ERROR family is sanitizer-safe for every status, including non-500 (418)', () => {
+    // codex-usage-api emits codexUsageApiHttpErrorMessage(status) for ANY non-ok,
+    // non-401/403 status, so the family is unbounded and cannot be a fixed pair.
+    // It is safe because only the numeric status is ever interpolated. Prove that
+    // as a family across a spread of statuses (4xx incl. the teapot 418, 5xx, and
+    // an arbitrary code well outside the representative witness set).
+    const statuses = [...CODEX_USAGE_API_HTTP_ERROR_STATUSES, 400, 429, 502, 599];
+    for (const status of statuses) {
+      const message = codexUsageApiHttpErrorMessage(status);
+      const text = sanitizeRefreshError('HTTP_ERROR', message);
+      expect(text.length).toBeGreaterThan(0);
+      expect(text).toContain(String(status));
+      expect(text.includes(SECRET)).toBe(false);
+      expect(text.includes(CREDENTIAL)).toBe(false);
+    }
+
+    // Durable coverage for the exact pair QA proved missing: HTTP 418 must be a
+    // representable, sanitizer-safe member of the enumerated concrete witnesses.
+    const teapot = { code: 'HTTP_ERROR', message: codexUsageApiHttpErrorMessage(418) };
+    expect(serverPairs).toContainEqual(teapot);
+    expect(sanitizeRefreshError(teapot.code, teapot.message)).toContain('418');
   });
 
   it('renders the refresh error section from the API payload without raw content', () => {

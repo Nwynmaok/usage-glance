@@ -8,10 +8,13 @@ const USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
- * Stable public failure messages this module can emit. Production code below
- * references these literals and the fallback-boundary test consumes
- * `CODEX_USAGE_API_ERROR_PAIRS`, so the enumerated set cannot drift from what
- * ships. Keep both in sync when adding a failure path.
+ * Stable public failure messages this module can emit. Every failure whose
+ * message is a fixed literal lives here and is enumerated concretely by
+ * `CODEX_USAGE_API_FIXED_ERROR_PAIRS`. The only non-literal failure is the
+ * templated HTTP_ERROR family (`codexUsageApiHttpErrorMessage`), which is
+ * parameterized by status and therefore proven as a family rather than a
+ * fixed pair. The fallback-boundary test consumes both, so the enumeration
+ * cannot drift from what ships. Keep them in sync when adding a failure path.
  */
 export const CODEX_USAGE_API_ERROR_MESSAGES = {
   noCredentials: 'No codex OAuth credentials found (run codex login)',
@@ -27,15 +30,48 @@ export function codexUsageApiHttpErrorMessage(status: number): string {
   return `Codex usage API returned HTTP ${status}`;
 }
 
-/** Exhaustive (code, message) pairs `fetchCodexUsageFromApi` can return. */
-export const CODEX_USAGE_API_ERROR_PAIRS: ReadonlyArray<{ code: SnapshotErrorCode; message: string }> = [
+interface CodexUsageApiErrorPair {
+  code: SnapshotErrorCode;
+  message: string;
+}
+
+/**
+ * Fixed (code, message) pairs `fetchCodexUsageFromApi` can return. Exhaustive
+ * over every failure path whose message is a stable literal. The one remaining
+ * failure path — a non-ok, non-401/403 HTTP status — is NOT a fixed pair: it is
+ * the templated HTTP_ERROR family (`codexUsageApiHttpErrorMessage`), enumerated
+ * separately below because its status is unbounded.
+ */
+export const CODEX_USAGE_API_FIXED_ERROR_PAIRS: ReadonlyArray<CodexUsageApiErrorPair> = [
   { code: 'AUTH_REQUIRED', message: CODEX_USAGE_API_ERROR_MESSAGES.noCredentials },
   { code: 'TIMEOUT', message: CODEX_USAGE_API_ERROR_MESSAGES.timedOut },
   { code: 'HTTP_ERROR', message: CODEX_USAGE_API_ERROR_MESSAGES.requestFailed },
   { code: 'AUTH_REQUIRED', message: CODEX_USAGE_API_ERROR_MESSAGES.tokenRejected },
-  { code: 'HTTP_ERROR', message: codexUsageApiHttpErrorMessage(500) },
   { code: 'MALFORMED_OUTPUT', message: CODEX_USAGE_API_ERROR_MESSAGES.nonJson },
   { code: 'MALFORMED_OUTPUT', message: CODEX_USAGE_API_ERROR_MESSAGES.missingRateLimit },
+];
+
+/**
+ * Representative statuses witnessing the templated HTTP_ERROR family. Any non-ok,
+ * non-401/403 status yields `{ code: 'HTTP_ERROR', message: codexUsageApiHttpErrorMessage(status) }`.
+ * The family is safe for ALL statuses — only the numeric status is interpolated,
+ * never a response body — so these are concrete witnesses (not an exhaustive
+ * bound), deliberately spanning 4xx (404, 418) and 5xx (500, 503).
+ */
+export const CODEX_USAGE_API_HTTP_ERROR_STATUSES = [404, 418, 500, 503] as const;
+
+/**
+ * Concrete (code, message) pairs `fetchCodexUsageFromApi` can return: every fixed
+ * pair plus one representative instance per status in the templated HTTP_ERROR
+ * family. Exhaustive over the fixed pairs; representative — not exhaustive, since
+ * the status is unbounded — over the templated family, whose safety is proven as
+ * a family in the sanitizer tests.
+ */
+export const CODEX_USAGE_API_ERROR_PAIRS: ReadonlyArray<CodexUsageApiErrorPair> = [
+  ...CODEX_USAGE_API_FIXED_ERROR_PAIRS,
+  ...CODEX_USAGE_API_HTTP_ERROR_STATUSES.map(
+    (status): CodexUsageApiErrorPair => ({ code: 'HTTP_ERROR', message: codexUsageApiHttpErrorMessage(status) }),
+  ),
 ];
 
 export interface CodexAuth {
