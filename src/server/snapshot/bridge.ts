@@ -33,6 +33,16 @@ function stateFromSnapshot(snap: GeneratedUsageSnapshot, windows: UsageWindowSna
   return stateFromPercents(windows);
 }
 
+/**
+ * Fixed, provider-agnostic guidance shown on a stale card. Derived only from
+ * the snapshot's own `staleAfterSeconds` — never from provider output or error
+ * text — so it cannot leak raw provider strings or credentials.
+ */
+function staleGuidance(staleAfterSeconds: number): string {
+  const mins = Math.max(1, Math.round(staleAfterSeconds / 60));
+  return `Snapshot is older than ${mins} min. Click Refresh to update, or check the provider directly.`;
+}
+
 export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderUsageSnapshot {
   const windows = bridgeWindows(snap.windows);
   const staleAfterMs = snap.staleAfterSeconds * 1000;
@@ -61,6 +71,13 @@ export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderU
       ? 'Provider-reported via undocumented endpoint'
       : 'Not provider-authoritative API data';
 
+  // A stale card must be honestly actionable: keep any existing sanitized
+  // message (e.g. MANUAL_REFRESH_REQUIRED guidance), otherwise attach the
+  // generic refresh guidance so a stale-on-arrival snapshot never renders as
+  // silent, unexplained old numbers.
+  const baseMessage = snap.message ?? snap.error?.message;
+  const message = stale ? (baseMessage ?? staleGuidance(snap.staleAfterSeconds)) : baseMessage;
+
   return {
     provider: snap.provider,
     state,
@@ -73,6 +90,6 @@ export function bridgeGeneratedSnapshot(snap: GeneratedUsageSnapshot): ProviderU
     windows,
     updatedAt: snap.generatedAt,
     stale,
-    message: snap.message ?? snap.error?.message,
+    message,
   };
 }
