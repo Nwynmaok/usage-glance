@@ -18,7 +18,7 @@ No branch interpolates provider-supplied text into that shape:
 | Generator script | `scripts/generate-codex-usage-snapshot.ts` | `makeErrorSnapshot(code, message)` persists exactly the stable pair above via `writeSnapshotAtomically`; stdout/stderr of the codex process are not captured into the snapshot. |
 | Refresh route | `src/server/routes/usage.ts` | `POST /api/usage/codex/refresh` returns either the `ProcessResult` literals from `process-runner.ts` (script spawned with `stdio` ignored, so child output cannot leak) or the generated snapshot's stored `error` field. |
 | Read route | `src/server/routes/usage.ts` + `src/server/snapshot/bridge.ts` | `GET /api/usage` bridges the snapshot; `message` comes from `snap.message ?? snap.error.message` — both already stable literals. |
-| UI | `src/client/main.ts` | `sanitizeRefreshError(code, fallback)` maps known codes to user-safe copy. Unknown codes fall back to the API message — safe **because** every server-originated message on this path is a stable literal (enumerated and asserted in the test below). |
+| UI | `src/client/main.ts` | `sanitizeRefreshError(code, fallback)` maps known codes to user-safe copy. Unknown codes fall back to the API message — safe **because** every server-originated message on this path is either a stable literal (enumerated exhaustively) or the one templated `HTTP_ERROR` family `Codex usage API returned HTTP ${status}`, which interpolates only the numeric HTTP status and never a response body. Both are asserted in the test below — the literals by enumeration, the family by a property-style test across representative and additional statuses. |
 
 Conclusion: the input→output boundary is closed at the innermost layer (both codex sources),
 so no downstream surface can re-acquire raw provider text. The only provider-derived values
@@ -28,8 +28,10 @@ string, and HTTP status codes.
 ## Residual risks (noted, not blocking)
 
 - `sanitizeRefreshError`'s default branch echoes the server message for unknown codes. Safe
-  today (all server messages are literals); a future code path that interpolates provider text
-  would leak through it. The e2e test pins every current server-originated pair to catch this.
+  today (every server message is either a fixed literal or the status-only `HTTP_ERROR`
+  template); a future code path that interpolates provider text would leak through it. The
+  e2e test pins every current fixed server-originated pair, and proves the templated
+  `HTTP_ERROR` family safe across a spread of statuses, to catch this.
 - `renderCard`/`renderRefreshSection` interpolate into `innerHTML` without escaping; inputs are
   the stable literals above, so no injection vector exists on this path today.
 
