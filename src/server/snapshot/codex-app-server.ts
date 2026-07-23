@@ -22,6 +22,33 @@ export type RateLimitsResult =
   | { ok: true; snapshot: RateLimitSnapshot }
   | { ok: false; code: SnapshotErrorCode; message: string };
 
+/**
+ * Every stable public failure message this module can emit. Production code
+ * below references these literals and the test's fallback-boundary proof
+ * consumes `CODEX_APP_SERVER_ERROR_PAIRS`, so the enumerated set cannot drift
+ * from what ships. Keep both in sync when adding a failure path.
+ */
+export const CODEX_APP_SERVER_ERROR_MESSAGES = {
+  cliUnavailable: 'codex CLI not available',
+  timedOut: 'codex app-server timed out',
+  failedToStart: 'codex app-server failed to start',
+  pipesUnavailable: 'codex app-server pipes unavailable',
+  loginRequired: 'codex login required',
+  returnedError: 'codex app-server returned an error',
+  missingRateLimits: 'rate limits response missing rateLimits',
+} as const;
+
+/** Exhaustive (code, message) pairs `readCodexRateLimits` can return. */
+export const CODEX_APP_SERVER_ERROR_PAIRS: ReadonlyArray<{ code: SnapshotErrorCode; message: string }> = [
+  { code: 'CLI_UNAVAILABLE', message: CODEX_APP_SERVER_ERROR_MESSAGES.cliUnavailable },
+  { code: 'TIMEOUT', message: CODEX_APP_SERVER_ERROR_MESSAGES.timedOut },
+  { code: 'NON_ZERO_EXIT', message: CODEX_APP_SERVER_ERROR_MESSAGES.failedToStart },
+  { code: 'NON_ZERO_EXIT', message: CODEX_APP_SERVER_ERROR_MESSAGES.pipesUnavailable },
+  { code: 'AUTH_REQUIRED', message: CODEX_APP_SERVER_ERROR_MESSAGES.loginRequired },
+  { code: 'NON_ZERO_EXIT', message: CODEX_APP_SERVER_ERROR_MESSAGES.returnedError },
+  { code: 'MALFORMED_OUTPUT', message: CODEX_APP_SERVER_ERROR_MESSAGES.missingRateLimits },
+];
+
 interface JsonRpcMessage {
   id?: number | string;
   result?: unknown;
@@ -45,7 +72,7 @@ export function readCodexRateLimits(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Rat
     try {
       child = spawn(bin, ['app-server'], { stdio: ['pipe', 'pipe', 'ignore'], env });
     } catch {
-      resolve({ ok: false, code: 'CLI_UNAVAILABLE', message: 'codex CLI not available' });
+      resolve({ ok: false, code: 'CLI_UNAVAILABLE', message: CODEX_APP_SERVER_ERROR_MESSAGES.cliUnavailable });
       return;
     }
 
@@ -59,7 +86,7 @@ export function readCodexRateLimits(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Rat
     };
 
     const timer = setTimeout(
-      () => finish({ ok: false, code: 'TIMEOUT', message: 'codex app-server timed out' }),
+      () => finish({ ok: false, code: 'TIMEOUT', message: CODEX_APP_SERVER_ERROR_MESSAGES.timedOut }),
       timeoutMs,
     );
 
@@ -68,14 +95,16 @@ export function readCodexRateLimits(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Rat
       finish({
         ok: false,
         code: isNotFound ? 'CLI_UNAVAILABLE' : 'NON_ZERO_EXIT',
-        message: isNotFound ? 'codex CLI not available' : 'codex app-server failed to start',
+        message: isNotFound
+          ? CODEX_APP_SERVER_ERROR_MESSAGES.cliUnavailable
+          : CODEX_APP_SERVER_ERROR_MESSAGES.failedToStart,
       });
     });
 
     const stdin = child.stdin;
     const stdout = child.stdout;
     if (!stdin || !stdout) {
-      finish({ ok: false, code: 'NON_ZERO_EXIT', message: 'codex app-server pipes unavailable' });
+      finish({ ok: false, code: 'NON_ZERO_EXIT', message: CODEX_APP_SERVER_ERROR_MESSAGES.pipesUnavailable });
       return;
     }
 
@@ -120,14 +149,14 @@ export function readCodexRateLimits(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Rat
             ok: false,
             code: authNeeded ? 'AUTH_REQUIRED' : 'NON_ZERO_EXIT',
             message: authNeeded
-              ? 'codex login required'
-              : 'codex app-server returned an error',
+              ? CODEX_APP_SERVER_ERROR_MESSAGES.loginRequired
+              : CODEX_APP_SERVER_ERROR_MESSAGES.returnedError,
           });
           return;
         }
         const result = msg.result as { rateLimits?: RateLimitSnapshot } | undefined;
         if (!result || typeof result !== 'object' || !result.rateLimits) {
-          finish({ ok: false, code: 'MALFORMED_OUTPUT', message: 'rate limits response missing rateLimits' });
+          finish({ ok: false, code: 'MALFORMED_OUTPUT', message: CODEX_APP_SERVER_ERROR_MESSAGES.missingRateLimits });
           return;
         }
         finish({ ok: true, snapshot: result.rateLimits });

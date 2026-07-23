@@ -28,8 +28,11 @@ fixture values are quoted.
   3. `GET /api/usage` bridged state: codex `state: "unavailable"` with the stable
      message; full body asserted free of the fixture.
   4. UI refresh state: `sanitizeRefreshError` asserted non-empty and fixture-free for
-     all 14 server-originated (code, message) pairs on the codex path; rendered
-     `renderRefreshSection` HTML shows the stable message and is fixture-free.
+     all 20 server-originated (code, message) pairs on the codex path — the pair list
+     is derived from exported mappings in the modules that emit them (`codex-usage-api.ts`,
+     `codex-app-server.ts`, `process-runner.ts`, and the refresh route in `usage.ts`), so it
+     cannot silently drift from production; rendered `renderRefreshSection` HTML shows the
+     stable message and is fixture-free.
 - **Useful-error criterion:** the exercised failures surface a non-blank, actionable
   code/message pair (auth failures tell the user how to log in), not an opaque failure.
 

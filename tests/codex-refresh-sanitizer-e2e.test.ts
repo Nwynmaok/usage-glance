@@ -28,6 +28,13 @@ vi.mock('../src/server/snapshot/reader.js', async (importOriginal) => {
 import { buildApp } from '../src/server/app.js';
 import { resetCache } from '../src/server/collectors/cache.js';
 import { sanitizeRefreshError, renderRefreshSection } from '../src/client/main.js';
+import {
+  CODEX_APP_SERVER_ERROR_PAIRS,
+  CODEX_APP_SERVER_ERROR_MESSAGES,
+} from '../src/server/snapshot/codex-app-server.js';
+import { CODEX_USAGE_API_ERROR_PAIRS } from '../src/server/snapshot/codex-usage-api.js';
+import { PROCESS_RUNNER_ERROR_PAIRS } from '../src/server/snapshot/process-runner.js';
+import { SNAPSHOT_READ_FAILED_ERROR } from '../src/server/routes/usage.js';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SANDBOX = join(tmpdir(), 'usage-glance-sanitizer-e2e');
@@ -39,8 +46,10 @@ const CREDENTIAL = `Bearer ${SECRET}`;
 const RAW_RPC_ERROR = `internal panic while refreshing session: request sent ${CREDENTIAL} and account token cache /users/someone/.codex/auth.json is locked`;
 const RAW_AUTH_RPC_ERROR = `authentication required: ${CREDENTIAL} expired for account synthetic-account-id`;
 
-const STABLE_NON_AUTH = { code: 'NON_ZERO_EXIT', message: 'codex app-server returned an error' };
-const STABLE_AUTH = { code: 'AUTH_REQUIRED', message: 'codex login required' };
+// Derived from the source module's exported literals so the offline injection
+// assertions below cannot drift from the messages production actually emits.
+const STABLE_NON_AUTH = { code: 'NON_ZERO_EXIT', message: CODEX_APP_SERVER_ERROR_MESSAGES.returnedError };
+const STABLE_AUTH = { code: 'AUTH_REQUIRED', message: CODEX_APP_SERVER_ERROR_MESSAGES.loginRequired };
 
 // A fake `codex app-server` speaking newline-delimited JSON-RPC. The raw error
 // text arrives via env var so the fixture is never persisted inside a script.
@@ -177,25 +186,23 @@ describe('refresh API and /api/usage surfaces', () => {
 });
 
 describe('UI refresh error state', () => {
+  // Every (code, message) pair the codex refresh path can hand the client is
+  // derived directly from the exported mappings in the modules that emit them —
+  // codex-usage-api.ts, codex-app-server.ts, process-runner.ts, and the refresh
+  // route in usage.ts. Consuming the same literals production ships means this
+  // proof cannot silently drift when a message is added or changed.
+  const serverPairs: ReadonlyArray<{ code: string; message: string }> = [
+    ...CODEX_USAGE_API_ERROR_PAIRS,
+    ...CODEX_APP_SERVER_ERROR_PAIRS,
+    ...PROCESS_RUNNER_ERROR_PAIRS,
+    SNAPSHOT_READ_FAILED_ERROR,
+  ];
+
   it('maps every server-originated failure code to non-empty user-safe text without raw content', () => {
-    // Every (code, message) pair the codex refresh path can hand the client,
-    // per codex-usage-api.ts, codex-app-server.ts, process-runner.ts, and usage.ts.
-    const serverPairs: Array<{ code: string; message: string }> = [
-      STABLE_NON_AUTH,
-      STABLE_AUTH,
-      { code: 'AUTH_REQUIRED', message: 'Codex usage API rejected the OAuth token' },
-      { code: 'AUTH_REQUIRED', message: 'No codex OAuth credentials found (run codex login)' },
-      { code: 'CLI_UNAVAILABLE', message: 'codex CLI not available' },
-      { code: 'TIMEOUT', message: 'codex app-server timed out' },
-      { code: 'TIMEOUT', message: 'Codex usage API timed out' },
-      { code: 'TIMEOUT', message: 'Script exceeded time limit' },
-      { code: 'HTTP_ERROR', message: 'Codex usage API request failed' },
-      { code: 'HTTP_ERROR', message: 'Codex usage API returned HTTP 500' },
-      { code: 'MALFORMED_OUTPUT', message: 'Codex usage API returned non-JSON output' },
-      { code: 'MALFORMED_OUTPUT', message: 'rate limits response missing rateLimits' },
-      { code: 'NON_ZERO_EXIT', message: 'Script exited with non-zero code' },
-      { code: 'SNAPSHOT_READ_FAILED', message: 'Generated snapshot could not be read after script completed' },
-    ];
+    // Sanity-check that the enumeration still covers the two stable messages the
+    // offline injection above proves, so an accidental gap surfaces here.
+    expect(serverPairs).toContainEqual(STABLE_NON_AUTH);
+    expect(serverPairs).toContainEqual(STABLE_AUTH);
 
     for (const { code, message } of serverPairs) {
       const text = sanitizeRefreshError(code, message);
@@ -221,8 +228,9 @@ describe('UI refresh error state', () => {
 
   it('even a hypothetical unsanitized fallback never receives raw text from the exercised path', () => {
     // sanitizeRefreshError falls back to the server message for unknown codes;
-    // the pairs above prove every server message on this path is already stable,
-    // so the fallback cannot reintroduce provider text.
+    // `serverPairs` (derived from production's exported mappings) proves every
+    // server message on this path is already a stable literal, so the fallback
+    // cannot reintroduce provider text.
     expect(sanitizeRefreshError(STABLE_NON_AUTH.code, STABLE_NON_AUTH.message)).toBe(STABLE_NON_AUTH.message);
     expect(sanitizeRefreshError(STABLE_AUTH.code, STABLE_AUTH.message)).toBe(
       'Codex not signed in. Run `npm run codex:login` once to authenticate.',
