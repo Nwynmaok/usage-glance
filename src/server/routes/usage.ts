@@ -4,6 +4,16 @@ import { getUsageSnapshots, resetCache } from '../collectors/cache.js';
 import { runScript, CODEX_REFRESH_TIMEOUT_MS, CLAUDE_REFRESH_TIMEOUT_MS } from '../snapshot/process-runner.js';
 import { readGeneratedSnapshot, defaultGeneratedSnapshotPath } from '../snapshot/reader.js';
 
+/**
+ * The one failure the refresh route itself originates (script exited 0 but the
+ * snapshot it should have written is unreadable). Exported so the sanitizer
+ * fallback-boundary test enumerates it alongside the snapshot-source modules.
+ */
+export const SNAPSHOT_READ_FAILED_ERROR = {
+  code: 'SNAPSHOT_READ_FAILED' as const,
+  message: 'Generated snapshot could not be read after script completed',
+};
+
 function scriptArgs(scriptRelPath: string): string[] {
   const tsx = resolve(process.cwd(), 'node_modules/.bin/tsx');
   const script = resolve(process.cwd(), scriptRelPath);
@@ -38,7 +48,7 @@ export async function usageRoutes(app: FastifyInstance): Promise<void> {
         generatedAt: null,
         staleAfterSeconds: null,
         snapshotLocation: null,
-        error: { code: 'SNAPSHOT_READ_FAILED', message: 'Generated snapshot could not be read after script completed' },
+        error: { code: SNAPSHOT_READ_FAILED_ERROR.code, message: SNAPSHOT_READ_FAILED_ERROR.message },
       });
     }
     resetCache();
@@ -75,7 +85,7 @@ export async function usageRoutes(app: FastifyInstance): Promise<void> {
         generatedAt: null,
         staleAfterSeconds: null,
         snapshotLocation: null,
-        error: { code: 'SNAPSHOT_READ_FAILED', message: 'Generated snapshot could not be read after script completed' },
+        error: { code: SNAPSHOT_READ_FAILED_ERROR.code, message: SNAPSHOT_READ_FAILED_ERROR.message },
       });
     }
     resetCache();
